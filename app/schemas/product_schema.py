@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from uuid import UUID
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -39,7 +40,7 @@ class ProductUpdate(BaseModel):
 
 
 class ProductOut(BaseModel):
-    id: int
+    id: UUID
     name: str
     sku: str
     description: Optional[str]

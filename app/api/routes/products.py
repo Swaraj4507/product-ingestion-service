@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +72,7 @@ async def create_product(
     response_model=ProductOut,
 )
 async def update_product(
-    product_id: int,
+    product_id: UUID,
     payload: ProductUpdate,
     service: ProductService = Depends(get_product_service),
 ) -> ProductOut:
@@ -98,7 +99,7 @@ async def update_product(
     status_code=status.HTTP_200_OK,
 )
 async def delete_product(
-    product_id: int,
+    product_id: UUID,
     service: ProductService = Depends(get_product_service),
 ) -> dict[str, str]:
     try:

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from uuid import UUID as PyUUID, uuid4
 
 from sqlalchemy import DateTime, Float, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -22,8 +22,12 @@ class UploadStatus:
 class Upload(Base):
     __tablename__ = "file_uploads"
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    task_id: Mapped[UUID] = mapped_column(
+    id: Mapped[PyUUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    task_id: Mapped[PyUUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
         unique=True,

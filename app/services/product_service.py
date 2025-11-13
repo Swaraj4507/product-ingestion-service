@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -102,7 +103,7 @@ class ProductService:
 
     async def update_product(
         self,
-        product_id: int,
+        product_id: UUID,
         *,
         name: Optional[str],
         description: Optional[str],
@@ -123,7 +124,7 @@ class ProductService:
         await self._session.refresh(product)
         return product
 
-    async def delete_product(self, product_id: int) -> None:
+    async def delete_product(self, product_id: UUID) -> None:
         product = await self._session.get(Product, product_id)
         if not product:
             raise ProductNotFoundError(f"Product with id {product_id} not found.")
