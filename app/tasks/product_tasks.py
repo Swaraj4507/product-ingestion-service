@@ -15,6 +15,7 @@ from app.repository.upload_repository import UploadSyncRepository
 logger = get_task_logger(__name__)
 
 CHUNK_SIZE = 10_000
+DELETE_CHUNK_SIZE = 10_000
 REDIS_KEY_TEMPLATE = "upload:{task_id}"
 
 
@@ -120,6 +121,70 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
 
     except Exception as exc:
         logger.exception("Failed to import products for task %s", task_id)
+        with database.sync_session() as session:
+            upload_repo = UploadSyncRepository(session)
+            upload_repo.mark_failed(task_uuid, reason=str(exc))
+        _update_redis(task_uuid, "failed", processed_records, total_records)
+        raise
+
+
+@celery_app.task(name="app.tasks.product_tasks.bulk_delete_products", bind=True)
+def bulk_delete_products(self, task_id: str) -> None:
+    task_uuid = UUID(task_id)
+    database = get_database()
+
+    processed_records = 0
+    total_records = 0
+
+    try:
+        with database.sync_session() as session:
+            product_repo = ProductRepository(session)
+            total_records = product_repo.count_all()
+
+            if total_records == 0:
+                logger.info("No products to delete for task %s", task_id)
+                upload_repo = UploadSyncRepository(session)
+                upload_repo.mark_processing(task_uuid, 0)
+                upload_repo.mark_completed(task_uuid)
+                _update_redis(task_uuid, "completed", 0, 0)
+                return
+
+            upload_repo = UploadSyncRepository(session)
+            upload_repo.mark_processing(task_uuid, total_records)
+
+        _update_redis(task_uuid, "in_progress", processed_records, total_records)
+
+        while processed_records < total_records:
+            with database.sync_session() as session:
+                product_repo = ProductRepository(session)
+                deleted_count = product_repo.delete_chunk(DELETE_CHUNK_SIZE)
+
+                if deleted_count == 0:
+                    break
+
+                processed_records += deleted_count
+                progress = (processed_records / total_records) * 100 if total_records else 0.0
+
+                upload_repo = UploadSyncRepository(session)
+                upload_repo.update_progress(
+                    task_uuid,
+                    processed_records=processed_records,
+                    total_records=total_records,
+                    progress=progress,
+                )
+
+            _update_redis(task_uuid, "in_progress", processed_records, total_records)
+            logger.info("Deleted %d/%d products for task %s", processed_records, total_records, task_id)
+
+        with database.sync_session() as session:
+            upload_repo = UploadSyncRepository(session)
+            upload_repo.mark_completed(task_uuid)
+
+        _update_redis(task_uuid, "completed", processed_records, total_records)
+        logger.info("Bulk delete completed for task %s: %d products deleted", task_id, processed_records)
+
+    except Exception as exc:
+        logger.exception("Failed to bulk delete products for task %s", task_id)
         with database.sync_session() as session:
             upload_repo = UploadSyncRepository(session)
             upload_repo.mark_failed(task_uuid, reason=str(exc))

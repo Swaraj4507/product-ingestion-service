@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from app.core.container import ServiceContainer
 from app.models.product import Product
+from app.models.upload import UploadStatus
+from app.repository.upload_repository import UploadRepository
 
 
 class ProductNotFoundError(LookupError):
@@ -139,4 +142,20 @@ class ProductService:
             return int(deleted)
         except IntegrityError as exc:  # pragma: no cover - defensive
             raise ValueError("Failed to delete products due to constraint violation.") from exc
+
+    async def trigger_bulk_delete(self, container: ServiceContainer) -> UUID:
+        task_id = uuid4()
+        upload_repo = UploadRepository(self._session)
+        await upload_repo.create_upload(
+            task_id=task_id,
+            filename="BULK_DELETE",
+        )
+        await self._session.commit()
+
+        container.celery_app.send_task(
+            "app.tasks.product_tasks.bulk_delete_products",
+            args=[str(task_id)],
+        )
+
+        return task_id
 

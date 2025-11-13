@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.container import ServiceContainer, get_container
 from app.core.db import get_async_session
 from app.schemas.product_schema import (
     PaginatedProducts,
@@ -110,10 +111,18 @@ async def delete_product(
     return {"message": "Deleted successfully"}
 
 
-@router.delete("/")
-async def delete_all_products(
+@router.post("/bulk-delete", status_code=status.HTTP_202_ACCEPTED)
+async def bulk_delete_products(
+    confirm: bool = Query(default=False, description="Confirmation required to proceed"),
     service: ProductService = Depends(get_product_service),
-) -> dict[str, int]:
-    deleted = await service.delete_all_products()
-    return {"deleted": deleted}
+    container: ServiceContainer = Depends(get_container),
+) -> dict[str, str]:
+    if not confirm:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Confirmation required. Append ?confirm=true to proceed.",
+        )
+
+    task_id = await service.trigger_bulk_delete(container)
+    return {"message": "Bulk delete started.", "task_id": str(task_id)}
 

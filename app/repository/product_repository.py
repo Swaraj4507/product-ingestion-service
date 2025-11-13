@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from typing import Any
 
-from sqlalchemy import func
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -38,4 +38,15 @@ class ProductRepository:
 
         result = self._session.execute(stmt)
         return result.rowcount or len(payload)
+
+    def count_all(self) -> int:
+        stmt = select(func.count(Product.id))
+        result = self._session.execute(stmt)
+        return result.scalar_one() or 0
+
+    def delete_chunk(self, limit: int) -> int:
+        subquery = select(Product.id).limit(limit).subquery()
+        delete_stmt = delete(Product).where(Product.id.in_(select(subquery.c.id)))
+        result = self._session.execute(delete_stmt)
+        return result.rowcount or 0
 
