@@ -17,6 +17,17 @@ def get_webhook_service(session: AsyncSession = Depends(get_async_session)) -> W
     return WebhookService(session)
 
 
+@router.get("/events", response_model=ApiResponse[list[dict[str, str]]])
+async def list_event_types(
+    service: WebhookService = Depends(get_webhook_service),
+) -> ApiResponse[list[dict[str, str]]]:
+    events = service.get_event_types()
+    return ApiResponse(
+        message="Event types retrieved successfully",
+        results=events,
+    )
+
+
 @router.get("/", response_model=ApiResponse[list[WebhookOut]])
 async def list_webhooks(
     service: WebhookService = Depends(get_webhook_service),

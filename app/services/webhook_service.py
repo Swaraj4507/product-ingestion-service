@@ -5,6 +5,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.event_types import WebhookEventType
 from app.repository.webhook_repository import WebhookRepository
 
 HTTP_TIMEOUT = 30.0
@@ -18,6 +19,13 @@ class WebhookService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._repository = WebhookRepository(session)
+
+    def get_event_types(self) -> list[dict[str, str]]:
+        """Return list of available event types formatted for UI."""
+        return [
+            {"value": event_type, "label": event_type.replace("_", " ").title()}
+            for event_type in WebhookEventType.all()
+        ]
 
     async def list_webhooks(
         self,

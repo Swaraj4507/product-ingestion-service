@@ -8,6 +8,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.celery_app import celery_app
 from app.core.db import get_database
+from app.core.event_types import WebhookEventType
 from app.core.redis_client import get_redis_client
 from app.repository.product_repository import ProductRepository
 from app.repository.upload_repository import UploadSyncRepository
@@ -121,7 +122,7 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
 
         celery_app.send_task(
             "app.tasks.webhook_tasks.trigger_webhooks",
-            args=["product_upload_complete", {"total_products": processed_records}],
+            args=[WebhookEventType.PRODUCT_UPLOAD_COMPLETE.value, {"total_products": processed_records}],
         )
 
     except Exception as exc:
@@ -190,7 +191,7 @@ def bulk_delete_products(self, task_id: str) -> None:
 
         celery_app.send_task(
             "app.tasks.webhook_tasks.trigger_webhooks",
-            args=["bulk_delete_complete", {"deleted_count": processed_records}],
+            args=[WebhookEventType.BULK_DELETE_COMPLETE.value, {"deleted_count": processed_records}],
         )
 
     except Exception as exc:

@@ -1,7 +1,9 @@
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.event_types import WebhookEventType
 
 
 class WebhookBase(BaseModel):
@@ -15,6 +17,14 @@ class WebhookBase(BaseModel):
     def validate_url(cls, value: str) -> str:
         if not value.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
+        return value.strip()
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        if not WebhookEventType.is_valid(value):
+            valid_types = ", ".join(WebhookEventType.all())
+            raise ValueError(f"Invalid event type. Valid types are: {valid_types}")
         return value.strip()
 
 
@@ -35,6 +45,16 @@ class WebhookUpdate(BaseModel):
             return value
         if not value.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
+        return value.strip()
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if not WebhookEventType.is_valid(value):
+            valid_types = ", ".join(WebhookEventType.all())
+            raise ValueError(f"Invalid event type. Valid types are: {valid_types}")
         return value.strip()
 
     def ensure_payload(self) -> "WebhookUpdate":
