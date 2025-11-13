@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.core.container import get_container
-from app.service.health_service import HealthService
+from app.services.health_service import HealthService
 
 router = APIRouter(prefix="/health", tags=["health"])
 

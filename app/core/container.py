@@ -1,15 +1,19 @@
 from functools import lru_cache
 
+from app.core.celery_app import celery_app
 from app.core.db import Database, get_database
+from app.core.redis_client import RedisClient, get_redis_client
 from app.core.settings import AppSettings, get_settings
 from app.repository.health_repository import HealthRepository
-from app.service.health_service import HealthService
+from app.services.health_service import HealthService
 
 
 class ServiceContainer:
     def __init__(self, settings: AppSettings) -> None:
         self._settings = settings
         self._database = get_database()
+        self._redis_client = get_redis_client()
+        self._celery_app = celery_app
 
         # Repositories
         self._health_repository = HealthRepository()
@@ -28,6 +32,14 @@ class ServiceContainer:
     @property
     def health_service(self) -> HealthService:
         return self._health_service
+
+    @property
+    def redis_client(self) -> RedisClient:
+        return self._redis_client
+
+    @property
+    def celery_app(self):
+        return self._celery_app
 
 
 @lru_cache(maxsize=1)

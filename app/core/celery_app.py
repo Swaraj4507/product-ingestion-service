@@ -1,14 +1,13 @@
+import sys
 from functools import lru_cache
 
 from celery import Celery
 
 from app.core.settings import settings
 
-# Celery configuration
-import sys
+# Detect Windows platform to adjust worker pool
+IS_WINDOWS = sys.platform.startswith("win")
 
-# Detect Windows platform
-is_windows = sys.platform.startswith('win')
 
 @lru_cache(maxsize=1)
 def create_celery_app() -> Celery:
@@ -25,12 +24,13 @@ def create_celery_app() -> Celery:
         task_default_queue=settings.celery_default_queue,
         task_acks_late=True,
         worker_prefetch_multiplier=settings.celery_prefetch_multiplier,
-        worker_pool='solo' if is_windows else 'prefork',
+        worker_pool="solo" if IS_WINDOWS else "prefork",
     )
 
-    celery.autodiscover_tasks(["app.service"])
+    celery.autodiscover_tasks(["app.tasks"])
 
     return celery
 
 
 celery_app = create_celery_app()
+
