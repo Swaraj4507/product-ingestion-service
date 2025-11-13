@@ -10,6 +10,7 @@ from app.core.celery_app import celery_app
 from app.core.db import get_database
 from app.core.event_types import WebhookEventType
 from app.core.redis_client import get_redis_client
+from app.core.webhook_payloads import WebhookPayloadBuilder
 from app.repository.product_repository import ProductRepository
 from app.repository.upload_repository import UploadSyncRepository
 
@@ -120,9 +121,11 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
 
         _update_redis(task_uuid, "completed", total_records, total_records)
 
+        event_type = WebhookEventType.PRODUCT_UPLOAD_COMPLETE.value
+        payload_data = WebhookPayloadBuilder.build_payload_data(event_type, total_products=processed_records)
         celery_app.send_task(
             "app.tasks.webhook_tasks.trigger_webhooks",
-            args=[WebhookEventType.PRODUCT_UPLOAD_COMPLETE.value, {"total_products": processed_records}],
+            args=[event_type, payload_data],
         )
 
     except Exception as exc:
@@ -189,9 +192,11 @@ def bulk_delete_products(self, task_id: str) -> None:
         _update_redis(task_uuid, "completed", processed_records, total_records)
         logger.info("Bulk delete completed for task %s: %d products deleted", task_id, processed_records)
 
+        event_type = WebhookEventType.BULK_DELETE_COMPLETE.value
+        payload_data = WebhookPayloadBuilder.build_payload_data(event_type, deleted_count=processed_records)
         celery_app.send_task(
             "app.tasks.webhook_tasks.trigger_webhooks",
-            args=[WebhookEventType.BULK_DELETE_COMPLETE.value, {"deleted_count": processed_records}],
+            args=[event_type, payload_data],
         )
 
     except Exception as exc:

@@ -28,6 +28,18 @@ async def list_event_types(
     )
 
 
+@router.get("/payloads", response_model=ApiResponse[dict[str, dict[str, Any]]])
+async def get_sample_payloads(
+    event_type: Optional[str] = Query(default=None, min_length=1),
+    service: WebhookService = Depends(get_webhook_service),
+) -> ApiResponse[dict[str, dict[str, Any]]]:
+    payloads = service.get_sample_payloads(event_type=event_type)
+    return ApiResponse(
+        message="Sample payloads retrieved successfully",
+        results=payloads,
+    )
+
+
 @router.get("", response_model=ApiResponse[list[WebhookOut]])
 async def list_webhooks(
     service: WebhookService = Depends(get_webhook_service),

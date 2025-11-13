@@ -6,6 +6,7 @@ from celery.utils.log import get_task_logger
 
 from app.core.celery_app import celery_app
 from app.core.db import get_database
+from app.core.webhook_payloads import WebhookPayloadBuilder
 from app.repository.webhook_repository import WebhookSyncRepository
 
 logger = get_task_logger(__name__)
@@ -28,11 +29,7 @@ def trigger_webhooks(self, event_type: str, payload: dict[str, Any]) -> None:
 
         logger.info("Triggering %d webhook(s) for event_type: %s", len(webhooks), event_type)
 
-        webhook_payload = {
-            "event_type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "data": payload,
-        }
+        webhook_payload = WebhookPayloadBuilder.build_full_payload(event_type, payload)
 
         for webhook in webhooks:
             try:

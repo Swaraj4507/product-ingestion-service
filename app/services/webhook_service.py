@@ -6,6 +6,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.event_types import WebhookEventType
+from app.core.webhook_payloads import WebhookPayloadBuilder
 from app.repository.webhook_repository import WebhookRepository
 
 HTTP_TIMEOUT = 30.0
@@ -26,6 +27,12 @@ class WebhookService:
             {"value": event_type, "label": event_type.replace("_", " ").title()}
             for event_type in WebhookEventType.all()
         ]
+
+    def get_sample_payloads(self, event_type: Optional[str] = None) -> dict[str, dict[str, Any]]:
+        """Return sample payloads for all event types."""
+        if event_type:
+            return {event_type: WebhookPayloadBuilder.get_sample_payload(event_type)}
+        return {event_type: WebhookPayloadBuilder.get_sample_payload(event_type) for event_type in WebhookEventType.all()}
 
     async def list_webhooks(
         self,
