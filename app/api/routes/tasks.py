@@ -1,12 +1,14 @@
 from http import HTTPStatus
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.container import ServiceContainer, get_container
 from app.core.db import get_async_session
 from app.schemas.response_schema import ApiResponse
+from app.schemas.upload_schema import PaginatedUploads, UploadOut
 from app.services.csv_import_service import CSVImportService, UploadNotFoundError
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -14,6 +16,27 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 def _get_service(container: ServiceContainer = Depends(get_container)) -> CSVImportService:
     return CSVImportService(container)
+
+
+@router.get("/", response_model=ApiResponse[PaginatedUploads])
+async def list_tasks(
+    service: CSVImportService = Depends(_get_service),
+    session: AsyncSession = Depends(get_async_session),
+    status: Optional[str] = Query(default=None, description="Filter by status (pending, processing, completed, failed)"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=20, ge=1, le=100, description="Items per page"),
+) -> ApiResponse[PaginatedUploads]:
+    result = await service.list_uploads(session, status=status, page=page, limit=limit)
+    paginated_data = PaginatedUploads(
+        total=result.total,
+        page=result.page,
+        limit=result.limit,
+        data=[UploadOut.model_validate(upload) for upload in result.items],
+    )
+    return ApiResponse(
+        message="Tasks retrieved successfully",
+        results=paginated_data,
+    )
 
 
 @router.get("/{task_id}")

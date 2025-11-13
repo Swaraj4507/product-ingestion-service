@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.health import router as health_router
 from app.api.routes.products import router as product_router
@@ -15,6 +16,16 @@ def create_application() -> FastAPI:
         version=container.settings.version,
     )
     application.state.container = container
+
+    # Configure CORS
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  
+        allow_credentials=True,
+        allow_methods=["*"], 
+        allow_headers=["*"],
+    )
+
     application.include_router(health_router)
     application.include_router(upload_router)
     application.include_router(product_router)

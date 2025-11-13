@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +36,36 @@ class UploadRepository:
         stmt = select(Upload).where(Upload.task_id == task_id)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def list_uploads(
+        self,
+        *,
+        status: Optional[str] = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> tuple[list[Upload], int]:
+        page = max(page, 1)
+        limit = max(min(limit, 100), 1)
+
+        base_query = select(Upload)
+        count_query = select(func.count()).select_from(Upload)
+
+        if status:
+            base_query = base_query.where(Upload.status == status)
+            count_query = count_query.where(Upload.status == status)
+
+        # Get total count
+        total_result = await self._session.execute(count_query)
+        total = int(total_result.scalar() or 0)
+
+        # Apply pagination and ordering
+        offset_value = (page - 1) * limit
+        base_query = base_query.order_by(Upload.created_at.desc()).offset(offset_value).limit(limit)
+
+        result = await self._session.execute(base_query)
+        uploads = list(result.scalars().all())
+
+        return uploads, total
 
 class UploadSyncRepository:
     def __init__(self, session: Session) -> None:
