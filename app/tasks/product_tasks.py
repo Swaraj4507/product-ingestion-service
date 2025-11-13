@@ -11,7 +11,7 @@ from app.core.db import get_database
 from app.core.event_types import WebhookEventType
 from app.core.redis_client import get_redis_client
 from app.core.webhook_payloads import WebhookPayloadBuilder
-from app.repository.product_repository import ProductRepository
+from app.repository.product_repository import ProductSyncRepository
 from app.repository.upload_repository import UploadSyncRepository
 
 logger = get_task_logger(__name__)
@@ -99,7 +99,7 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
                     continue
 
                 with database.sync_session() as session:
-                    product_repo = ProductRepository(session)
+                    product_repo = ProductSyncRepository(session)
                     product_repo.bulk_upsert(products)
 
                     processed_records += len(products)
@@ -147,7 +147,7 @@ def bulk_delete_products(self, task_id: str) -> None:
 
     try:
         with database.sync_session() as session:
-            product_repo = ProductRepository(session)
+            product_repo = ProductSyncRepository(session)
             total_records = product_repo.count_all()
 
             if total_records == 0:
@@ -165,7 +165,7 @@ def bulk_delete_products(self, task_id: str) -> None:
 
         while processed_records < total_records:
             with database.sync_session() as session:
-                product_repo = ProductRepository(session)
+                product_repo = ProductSyncRepository(session)
                 deleted_count = product_repo.delete_chunk(DELETE_CHUNK_SIZE)
 
                 if deleted_count == 0:

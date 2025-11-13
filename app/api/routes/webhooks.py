@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.container import ServiceContainer, get_container
 from app.core.db import get_async_session
 from app.schemas.response_schema import ApiResponse
 from app.schemas.webhook_schema import WebhookCreate, WebhookOut, WebhookUpdate
@@ -13,8 +14,10 @@ from app.services.webhook_service import WebhookNotFoundError, WebhookService
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-def get_webhook_service(session: AsyncSession = Depends(get_async_session)) -> WebhookService:
-    return WebhookService(session)
+def get_webhook_service(
+    container: ServiceContainer = Depends(get_container),
+) -> WebhookService:
+    return container.webhook_service
 
 
 @router.get("/events", response_model=ApiResponse[list[dict[str, str]]])
@@ -43,10 +46,11 @@ async def get_sample_payloads(
 @router.get("", response_model=ApiResponse[list[WebhookOut]])
 async def list_webhooks(
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
     event_type: Optional[str] = Query(default=None, min_length=1),
     is_active: Optional[bool] = Query(default=None),
 ) -> ApiResponse[list[dict]]:
-    webhooks = await service.list_webhooks(event_type=event_type, is_active=is_active)
+    webhooks = await service.list_webhooks(session, event_type=event_type, is_active=is_active)
     return ApiResponse(
         message="Webhooks retrieved successfully",
         results=webhooks,
@@ -61,8 +65,10 @@ async def list_webhooks(
 async def create_webhook(
     payload: WebhookCreate,
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict]:
     webhook = await service.create_webhook(
+        session,
         name=payload.name.strip(),
         url=payload.url,
         event_type=payload.event_type.strip(),
@@ -81,9 +87,10 @@ async def create_webhook(
 async def get_webhook(
     webhook_id: UUID,
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict]:
     try:
-        webhook = await service.get_webhook(webhook_id)
+        webhook = await service.get_webhook(session, webhook_id)
     except WebhookNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
 
@@ -101,6 +108,7 @@ async def update_webhook(
     webhook_id: UUID,
     payload: WebhookUpdate,
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict]:
     try:
         payload.ensure_payload()
@@ -109,6 +117,7 @@ async def update_webhook(
 
     try:
         webhook = await service.update_webhook(
+            session,
             webhook_id,
             name=payload.name.strip() if payload.name is not None else None,
             url=payload.url,
@@ -131,9 +140,10 @@ async def update_webhook(
 async def delete_webhook(
     webhook_id: UUID,
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict[str, str]]:
     try:
-        await service.delete_webhook(webhook_id)
+        await service.delete_webhook(session, webhook_id)
     except WebhookNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
 
@@ -151,9 +161,10 @@ async def test_webhook(
     webhook_id: UUID,
     custom_payload: Optional[dict[str, Any]] = Body(default=None, description="Optional custom payload to send"),
     service: WebhookService = Depends(get_webhook_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict[str, Any]]:
     try:
-        result = await service.test_webhook(webhook_id, custom_payload=custom_payload)
+        result = await service.test_webhook(session, webhook_id, custom_payload=custom_payload)
     except WebhookNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
     except ValueError as exc:

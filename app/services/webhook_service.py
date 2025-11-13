@@ -17,9 +17,9 @@ class WebhookNotFoundError(LookupError):
 
 
 class WebhookService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
-        self._repository = WebhookRepository(session)
+    def __init__(self) -> None:
+        """WebhookService is a singleton - session is passed per request."""
+        pass
 
     def get_event_types(self) -> list[dict[str, str]]:
         """Return list of available event types formatted for UI."""
@@ -36,11 +36,13 @@ class WebhookService:
 
     async def list_webhooks(
         self,
+        session: AsyncSession,
         *,
         event_type: Optional[str] = None,
         is_active: Optional[bool] = None,
     ) -> list[dict]:
-        webhooks = await self._repository.list_webhooks(
+        repository = WebhookRepository(session)
+        webhooks = await repository.list_webhooks(
             event_type=event_type,
             is_active=is_active,
         )
@@ -59,13 +61,15 @@ class WebhookService:
 
     async def create_webhook(
         self,
+        session: AsyncSession,
         *,
         name: str,
         url: str,
         event_type: str,
         is_active: bool,
     ) -> dict:
-        webhook = await self._repository.create_webhook(
+        repository = WebhookRepository(session)
+        webhook = await repository.create_webhook(
             name=name,
             url=url,
             event_type=event_type,
@@ -81,8 +85,9 @@ class WebhookService:
             "updated_at": webhook.updated_at.isoformat(),
         }
 
-    async def get_webhook(self, webhook_id: UUID) -> dict:
-        webhook = await self._repository.get_by_id(webhook_id)
+    async def get_webhook(self, session: AsyncSession, webhook_id: UUID) -> dict:
+        repository = WebhookRepository(session)
+        webhook = await repository.get_by_id(webhook_id)
         if not webhook:
             raise WebhookNotFoundError(f"Webhook with id {webhook_id} not found.")
 
@@ -98,6 +103,7 @@ class WebhookService:
 
     async def update_webhook(
         self,
+        session: AsyncSession,
         webhook_id: UUID,
         *,
         name: Optional[str],
@@ -105,11 +111,12 @@ class WebhookService:
         event_type: Optional[str],
         is_active: Optional[bool],
     ) -> dict:
-        webhook = await self._repository.get_by_id(webhook_id)
+        repository = WebhookRepository(session)
+        webhook = await repository.get_by_id(webhook_id)
         if not webhook:
             raise WebhookNotFoundError(f"Webhook with id {webhook_id} not found.")
 
-        updated = await self._repository.update_webhook(
+        updated = await repository.update_webhook(
             webhook,
             name=name,
             url=url,
@@ -127,19 +134,22 @@ class WebhookService:
             "updated_at": updated.updated_at.isoformat(),
         }
 
-    async def delete_webhook(self, webhook_id: UUID) -> None:
-        webhook = await self._repository.get_by_id(webhook_id)
+    async def delete_webhook(self, session: AsyncSession, webhook_id: UUID) -> None:
+        repository = WebhookRepository(session)
+        webhook = await repository.get_by_id(webhook_id)
         if not webhook:
             raise WebhookNotFoundError(f"Webhook with id {webhook_id} not found.")
 
-        await self._repository.delete_webhook(webhook)
+        await repository.delete_webhook(webhook)
 
     async def test_webhook(
         self,
+        session: AsyncSession,
         webhook_id: UUID,
         custom_payload: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        webhook = await self._repository.get_by_id(webhook_id)
+        repository = WebhookRepository(session)
+        webhook = await repository.get_by_id(webhook_id)
         if not webhook:
             raise WebhookNotFoundError(f"Webhook with id {webhook_id} not found.")
 

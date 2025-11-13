@@ -25,20 +25,23 @@ from app.services.product_service import (
 router = APIRouter(prefix="/api/products", tags=["products"])
 
 
-def get_product_service(session: AsyncSession = Depends(get_async_session)) -> ProductService:
-    return ProductService(session)
+def get_product_service(
+    container: ServiceContainer = Depends(get_container),
+) -> ProductService:
+    return container.product_service
 
 
 @router.get("", response_model=ApiResponse[PaginatedProducts])
 async def list_products(
     service: ProductService = Depends(get_product_service),
+    session: AsyncSession = Depends(get_async_session),
     search: Optional[str] = Query(default=None, min_length=1),
     active: Optional[bool] = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
 ) -> ApiResponse[PaginatedProducts]:
     search_term = search.strip() if search else None
-    result = await service.list_products(search=search_term, active=active, page=page, limit=limit)
+    result = await service.list_products(session, search=search_term, active=active, page=page, limit=limit)
     paginated_data = PaginatedProducts(
         total=result.total,
         page=result.page,
@@ -58,20 +61,25 @@ async def list_products(
 )
 async def create_product(
     payload: ProductCreate,
+    override: bool = Query(default=False, description="Override existing product with same SKU"),
     service: ProductService = Depends(get_product_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[ProductOut]:
     try:
         product = await service.create_product(
+            session,
             name=payload.name.strip(),
             sku=payload.sku,
             description=payload.description,
             active=payload.active,
+            override=override,
         )
+        message = "Product updated successfully" if override else "Product created successfully"
     except ProductAlreadyExistsError as exc:
         raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 
     return ApiResponse(
-        message="Product created successfully",
+        message=message,
         results=ProductOut.model_validate(product),
     )
 
@@ -83,7 +91,9 @@ async def create_product(
 async def update_product(
     product_id: UUID,
     payload: ProductUpdate,
+    override: bool = Query(default=False, description="Override existing product with same SKU"),
     service: ProductService = Depends(get_product_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[ProductOut]:
     try:
         payload.ensure_payload()
@@ -92,14 +102,18 @@ async def update_product(
 
     try:
         product = await service.update_product(
+            session,
             product_id,
             name=payload.name.strip() if payload.name is not None else None,
             description=payload.description,
             active=payload.active,
-            sku=payload.sku,
+            sku=payload.sku.strip() if payload.sku is not None else None,
+            override=override,
         )
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
+    except ProductAlreadyExistsError as exc:
+        raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 
     return ApiResponse(
         message="Product updated successfully",
@@ -114,9 +128,10 @@ async def update_product(
 async def delete_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),
+    session: AsyncSession = Depends(get_async_session),
 ) -> ApiResponse[dict[str, str]]:
     try:
-        await service.delete_product(product_id)
+        await service.delete_product(session, product_id)
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
 
@@ -130,6 +145,7 @@ async def delete_product(
 async def bulk_delete_products(
     confirm: bool = Query(default=False, description="Confirmation required to proceed"),
     service: ProductService = Depends(get_product_service),
+    session: AsyncSession = Depends(get_async_session),
     container: ServiceContainer = Depends(get_container),
 ) -> ApiResponse[dict[str, str]]:
     if not confirm:
@@ -138,7 +154,7 @@ async def bulk_delete_products(
             detail="Confirmation required. Append ?confirm=true to proceed.",
         )
 
-    task_id = await service.trigger_bulk_delete(container)
+    task_id = await service.trigger_bulk_delete(session, container.celery_app)
     return ApiResponse(
         message="Bulk delete started",
         results={"task_id": str(task_id)},

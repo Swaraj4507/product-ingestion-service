@@ -6,6 +6,8 @@ from app.core.redis_client import RedisClient, get_redis_client
 from app.core.settings import AppSettings, get_settings
 from app.repository.health_repository import HealthRepository
 from app.services.health_service import HealthService
+from app.services.product_service import ProductService
+from app.services.webhook_service import WebhookService
 
 
 class ServiceContainer:
@@ -18,8 +20,10 @@ class ServiceContainer:
         # Repositories
         self._health_repository = HealthRepository()
 
-        # Services
+        # Services (singletons)
         self._health_service = HealthService(self._health_repository)
+        self._product_service = ProductService()
+        self._webhook_service = WebhookService()
 
     @property
     def settings(self) -> AppSettings:
@@ -32,6 +36,14 @@ class ServiceContainer:
     @property
     def health_service(self) -> HealthService:
         return self._health_service
+
+    @property
+    def product_service(self) -> ProductService:
+        return self._product_service
+
+    @property
+    def webhook_service(self) -> WebhookService:
+        return self._webhook_service
 
     @property
     def redis_client(self) -> RedisClient:

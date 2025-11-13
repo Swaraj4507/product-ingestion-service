@@ -20,7 +20,7 @@ def _get_service(container: ServiceContainer = Depends(get_container)) -> CSVImp
     return CSVImportService(container)
 
 
-@router.post("/", status_code=HTTPStatus.ACCEPTED)
+@router.post("", status_code=HTTPStatus.ACCEPTED)
 async def upload_csv(
     file: UploadFile = File(...),
     service: CSVImportService = Depends(_get_service),

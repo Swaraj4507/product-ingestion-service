@@ -4,14 +4,11 @@ from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
-from app.core.container import ServiceContainer
 from app.models.product import Product
-from app.models.upload import UploadStatus
+from app.repository.product_repository import ProductRepository
 from app.repository.upload_repository import UploadRepository
 
 
@@ -32,11 +29,13 @@ class ProductListResult:
 
 
 class ProductService:
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self) -> None:
+        """ProductService is a singleton - session is passed per request."""
+        pass
 
     async def list_products(
         self,
+        session: AsyncSession,
         *,
         search: Optional[str],
         active: Optional[bool],
@@ -46,74 +45,61 @@ class ProductService:
         page = max(page, 1)
         limit = max(min(limit, 100), 1)
 
-        filters = []
-        if search:
-            pattern = f"%{search.lower()}%"
-            filters.append(
-                or_(
-                    func.lower(Product.name).like(pattern),
-                    func.lower(Product.sku).like(pattern),
-                    func.lower(Product.description).like(pattern),
-                )
-            )
+        repository = ProductRepository(session)
+        items, total = await repository.list_products(
+            search=search,
+            active=active,
+            page=page,
+            limit=limit,
+        )
 
-        if active is not None:
-            filters.append(Product.active == active)
-
-        base_query = select(Product)
-        count_query = select(func.count()).select_from(Product)
-
-        if filters:
-            for condition in filters:
-                base_query = base_query.where(condition)
-                count_query = count_query.where(condition)
-
-        total_result = await self._session.execute(count_query)
-        total = int(total_result.scalar() or 0)
-
-        offset_value = (page - 1) * limit
-        base_query = base_query.order_by(Product.id).offset(offset_value).limit(limit)
-        rows = await self._session.execute(base_query)
-        items = rows.scalars().all()
-
-        return ProductListResult(total=total, page=page, limit=limit, items=list(items))
+        return ProductListResult(total=total, page=page, limit=limit, items=items)
 
     async def create_product(
         self,
+        session: AsyncSession,
         *,
         name: str,
         sku: str,
         description: Optional[str],
         active: bool,
+        override: bool = False,
     ) -> Product:
-        normalized_sku = sku.strip().lower()
-        exists_query = select(func.count()).select_from(Product).where(
-            func.lower(Product.sku) == normalized_sku
-        )
-        exists_result = await self._session.execute(exists_query)
-        if (exists_result.scalar() or 0) > 0:
-            raise ProductAlreadyExistsError(f"Product with SKU '{sku}' already exists.")
+        repository = ProductRepository(session)
+        existing_product = await repository.find_by_sku(sku)
 
+        if existing_product:
+            if not override:
+                raise ProductAlreadyExistsError(f"Product with SKU '{sku}' already exists.")
+            # Override: update existing product
+            existing_product.name = name
+            existing_product.description = description
+            existing_product.active = active
+            return await repository.update(existing_product)
+
+        # Create new product
+        normalized_sku = sku.strip().lower()
         product = Product(
             name=name,
             sku=normalized_sku,
             description=description,
             active=active,
         )
-        self._session.add(product)
-        await self._session.flush()
-        return product
+        return await repository.create(product)
 
     async def update_product(
         self,
+        session: AsyncSession,
         product_id: UUID,
         *,
         name: Optional[str],
         sku: Optional[str],
         description: Optional[str],
         active: Optional[bool],
+        override: bool = False,
     ) -> Product:
-        product = await self._session.get(Product, product_id)
+        repository = ProductRepository(session)
+        product = await repository.find_by_id(product_id)
         if not product:
             raise ProductNotFoundError(f"Product with id {product_id} not found.")
 
@@ -123,39 +109,52 @@ class ProductService:
             product.description = description
         if active is not None:
             product.active = active
+        
         if sku is not None:
-            product.sku = sku
+            normalized_sku = sku.strip().lower()
+            # Check if SKU already exists on a different product
+            if product.sku.lower() != normalized_sku:
+                existing_product = await repository.find_by_sku_excluding_id(sku, product_id)
+                
+                if existing_product:
+                    if not override:
+                        raise ProductAlreadyExistsError(
+                            f"Product with SKU '{sku}' already exists. Use override=true to update."
+                        )
+                    # Override: delete the conflicting product
+                    await repository.delete(existing_product)
+            
+            # Update current product's SKU
+            product.sku = normalized_sku
 
-        await self._session.flush()
-        await self._session.refresh(product)
-        return product
+        return await repository.update(product)
 
-    async def delete_product(self, product_id: UUID) -> None:
-        product = await self._session.get(Product, product_id)
+    async def delete_product(self, session: AsyncSession, product_id: UUID) -> None:
+        repository = ProductRepository(session)
+        product = await repository.find_by_id(product_id)
         if not product:
             raise ProductNotFoundError(f"Product with id {product_id} not found.")
 
-        await self._session.delete(product)
-        await self._session.flush()
+        await repository.delete(product)
 
-    async def delete_all_products(self) -> int:
+    async def delete_all_products(self, session: AsyncSession) -> int:
         try:
-            result = await self._session.execute(delete(Product))
-            deleted = result.rowcount or 0
-            return int(deleted)
+            repository = ProductRepository(session)
+            return await repository.delete_all()
         except IntegrityError as exc:  # pragma: no cover - defensive
             raise ValueError("Failed to delete products due to constraint violation.") from exc
 
-    async def trigger_bulk_delete(self, container: ServiceContainer) -> UUID:
+    async def trigger_bulk_delete(self, session: AsyncSession, celery_app) -> UUID:
+        """Trigger bulk delete task. celery_app is passed from container to avoid circular import."""
         task_id = uuid4()
-        upload_repo = UploadRepository(self._session)
+        upload_repo = UploadRepository(session)
         await upload_repo.create_upload(
             task_id=task_id,
             filename="BULK_DELETE",
         )
-        await self._session.commit()
+        await session.commit()
 
-        container.celery_app.send_task(
+        celery_app.send_task(
             "app.tasks.product_tasks.bulk_delete_products",
             args=[str(task_id)],
         )
