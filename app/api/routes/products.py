@@ -15,6 +15,7 @@ from app.schemas.product_schema import (
     ProductOut,
     ProductUpdate,
 )
+from app.schemas.response_schema import ApiResponse
 from app.services.product_service import (
     ProductAlreadyExistsError,
     ProductNotFoundError,
@@ -28,33 +29,37 @@ def get_product_service(session: AsyncSession = Depends(get_async_session)) -> P
     return ProductService(session)
 
 
-@router.get("/", response_model=PaginatedProducts)
+@router.get("/", response_model=ApiResponse[PaginatedProducts])
 async def list_products(
     service: ProductService = Depends(get_product_service),
     search: Optional[str] = Query(default=None, min_length=1),
     active: Optional[bool] = Query(default=None),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
-) -> PaginatedProducts:
+) -> ApiResponse[PaginatedProducts]:
     search_term = search.strip() if search else None
     result = await service.list_products(search=search_term, active=active, page=page, limit=limit)
-    return PaginatedProducts(
+    paginated_data = PaginatedProducts(
         total=result.total,
         page=result.page,
         limit=result.limit,
         data=[ProductOut.model_validate(product) for product in result.items],
     )
+    return ApiResponse(
+        message="Products retrieved successfully",
+        results=paginated_data,
+    )
 
 
 @router.post(
     "/",
-    response_model=ProductOut,
+    response_model=ApiResponse[ProductOut],
     status_code=status.HTTP_201_CREATED,
 )
 async def create_product(
     payload: ProductCreate,
     service: ProductService = Depends(get_product_service),
-) -> ProductOut:
+) -> ApiResponse[ProductOut]:
     try:
         product = await service.create_product(
             name=payload.name.strip(),
@@ -65,18 +70,21 @@ async def create_product(
     except ProductAlreadyExistsError as exc:
         raise HTTPException(status_code=HTTPStatus.CONFLICT, detail=str(exc)) from exc
 
-    return ProductOut.model_validate(product)
+    return ApiResponse(
+        message="Product created successfully",
+        results=ProductOut.model_validate(product),
+    )
 
 
 @router.put(
     "/{product_id}",
-    response_model=ProductOut,
+    response_model=ApiResponse[ProductOut],
 )
 async def update_product(
     product_id: UUID,
     payload: ProductUpdate,
     service: ProductService = Depends(get_product_service),
-) -> ProductOut:
+) -> ApiResponse[ProductOut]:
     try:
         payload.ensure_payload()
     except ValueError as exc:
@@ -92,7 +100,10 @@ async def update_product(
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
 
-    return ProductOut.model_validate(product)
+    return ApiResponse(
+        message="Product updated successfully",
+        results=ProductOut.model_validate(product),
+    )
 
 
 @router.delete(
@@ -102,13 +113,16 @@ async def update_product(
 async def delete_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),
-) -> dict[str, str]:
+) -> ApiResponse[dict[str, str]]:
     try:
         await service.delete_product(product_id)
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
 
-    return {"message": "Deleted successfully"}
+    return ApiResponse(
+        message="Product deleted successfully",
+        results={"id": str(product_id)},
+    )
 
 
 @router.post("/bulk-delete", status_code=status.HTTP_202_ACCEPTED)
@@ -116,7 +130,7 @@ async def bulk_delete_products(
     confirm: bool = Query(default=False, description="Confirmation required to proceed"),
     service: ProductService = Depends(get_product_service),
     container: ServiceContainer = Depends(get_container),
-) -> dict[str, str]:
+) -> ApiResponse[dict[str, str]]:
     if not confirm:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
@@ -124,5 +138,8 @@ async def bulk_delete_products(
         )
 
     task_id = await service.trigger_bulk_delete(container)
-    return {"message": "Bulk delete started.", "task_id": str(task_id)}
+    return ApiResponse(
+        message="Bulk delete started",
+        results={"task_id": str(task_id)},
+    )
 

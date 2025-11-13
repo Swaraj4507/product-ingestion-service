@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.container import ServiceContainer, get_container
 from app.core.db import get_async_session
+from app.schemas.response_schema import ApiResponse
 from app.services.csv_import_service import CSVImportService, UploadNotFoundError
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -20,10 +21,10 @@ async def get_task_status(
     task_id: UUID,
     service: CSVImportService = Depends(_get_service),
     session: AsyncSession = Depends(get_async_session),
-) -> dict[str, object]:
+) -> ApiResponse[dict[str, object]]:
     try:
         status_data = await service.get_status(task_id, session)
-        return {
+        task_status = {
             "task_id": str(task_id),
             "status": status_data["status"],
             "progress": status_data["progress_percentage"],
@@ -32,4 +33,9 @@ async def get_task_status(
         }
     except UploadNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc
+
+    return ApiResponse(
+        message="Task status retrieved successfully",
+        results=task_status,
+    )
 
