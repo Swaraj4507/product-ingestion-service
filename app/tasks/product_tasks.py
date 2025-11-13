@@ -119,6 +119,11 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
 
         _update_redis(task_uuid, "completed", total_records, total_records)
 
+        celery_app.send_task(
+            "app.tasks.webhook_tasks.trigger_webhooks",
+            args=["product_upload_complete", {"total_products": processed_records}],
+        )
+
     except Exception as exc:
         logger.exception("Failed to import products for task %s", task_id)
         with database.sync_session() as session:
@@ -182,6 +187,11 @@ def bulk_delete_products(self, task_id: str) -> None:
 
         _update_redis(task_uuid, "completed", processed_records, total_records)
         logger.info("Bulk delete completed for task %s: %d products deleted", task_id, processed_records)
+
+        celery_app.send_task(
+            "app.tasks.webhook_tasks.trigger_webhooks",
+            args=["bulk_delete_complete", {"deleted_count": processed_records}],
+        )
 
     except Exception as exc:
         logger.exception("Failed to bulk delete products for task %s", task_id)
