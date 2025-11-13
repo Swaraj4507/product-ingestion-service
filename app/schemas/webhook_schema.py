@@ -3,7 +3,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.event_types import WebhookEventType
+from app.utils.validators import (
+    validate_optional_webhook_event_type,
+    validate_optional_webhook_url,
+    validate_webhook_event_type,
+    validate_webhook_url,
+)
 
 
 class WebhookBase(BaseModel):
@@ -15,17 +20,12 @@ class WebhookBase(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: str) -> str:
-        if not value.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return value.strip()
+        return validate_webhook_url(value)
 
     @field_validator("event_type")
     @classmethod
     def validate_event_type(cls, value: str) -> str:
-        if not WebhookEventType.is_valid(value):
-            valid_types = ", ".join(WebhookEventType.all())
-            raise ValueError(f"Invalid event type. Valid types are: {valid_types}")
-        return value.strip()
+        return validate_webhook_event_type(value)
 
 
 class WebhookCreate(WebhookBase):
@@ -41,21 +41,12 @@ class WebhookUpdate(BaseModel):
     @field_validator("url")
     @classmethod
     def validate_url(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-        if not value.startswith(("http://", "https://")):
-            raise ValueError("URL must start with http:// or https://")
-        return value.strip()
+        return validate_optional_webhook_url(value)
 
     @field_validator("event_type")
     @classmethod
     def validate_event_type(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-        if not WebhookEventType.is_valid(value):
-            valid_types = ", ".join(WebhookEventType.all())
-            raise ValueError(f"Invalid event type. Valid types are: {valid_types}")
-        return value.strip()
+        return validate_optional_webhook_event_type(value)
 
     def ensure_payload(self) -> "WebhookUpdate":
         if self.name is None and self.url is None and self.event_type is None and self.is_active is None:
