@@ -14,6 +14,7 @@ def create_application() -> FastAPI:
     application = FastAPI(
         title=container.settings.app_name,
         version=container.settings.version,
+        redirect_slashes=False,  # Disable automatic trailing slash redirects
     )
     application.state.container = container
 

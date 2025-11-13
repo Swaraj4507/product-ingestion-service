@@ -28,7 +28,7 @@ async def list_event_types(
     )
 
 
-@router.get("/", response_model=ApiResponse[list[WebhookOut]])
+@router.get("", response_model=ApiResponse[list[WebhookOut]])
 async def list_webhooks(
     service: WebhookService = Depends(get_webhook_service),
     event_type: Optional[str] = Query(default=None, min_length=1),
@@ -42,7 +42,7 @@ async def list_webhooks(
 
 
 @router.post(
-    "/",
+    "",
     response_model=ApiResponse[WebhookOut],
     status_code=status.HTTP_201_CREATED,
 )

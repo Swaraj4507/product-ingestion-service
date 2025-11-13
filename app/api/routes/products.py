@@ -29,7 +29,7 @@ def get_product_service(session: AsyncSession = Depends(get_async_session)) -> P
     return ProductService(session)
 
 
-@router.get("/", response_model=ApiResponse[PaginatedProducts])
+@router.get("", response_model=ApiResponse[PaginatedProducts])
 async def list_products(
     service: ProductService = Depends(get_product_service),
     search: Optional[str] = Query(default=None, min_length=1),
@@ -52,7 +52,7 @@ async def list_products(
 
 
 @router.post(
-    "/",
+    "",
     response_model=ApiResponse[ProductOut],
     status_code=status.HTTP_201_CREATED,
 )
@@ -96,6 +96,7 @@ async def update_product(
             name=payload.name.strip() if payload.name is not None else None,
             description=payload.description,
             active=payload.active,
+            sku=payload.sku,
         )
     except ProductNotFoundError as exc:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail=str(exc)) from exc

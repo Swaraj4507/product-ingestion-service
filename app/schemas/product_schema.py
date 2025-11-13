@@ -21,11 +21,7 @@ class ProductCreate(ProductBase):
         return value.strip()
 
 
-class ProductUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    description: Optional[str] = None
-    active: Optional[bool] = None
-
+class ProductUpdate(ProductCreate):
     @field_validator("name")
     @classmethod
     def normalize_name(cls, value: Optional[str]) -> Optional[str]:

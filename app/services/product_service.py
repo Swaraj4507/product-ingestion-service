@@ -109,6 +109,7 @@ class ProductService:
         product_id: UUID,
         *,
         name: Optional[str],
+        sku: Optional[str],
         description: Optional[str],
         active: Optional[bool],
     ) -> Product:
@@ -122,6 +123,8 @@ class ProductService:
             product.description = description
         if active is not None:
             product.active = active
+        if sku is not None:
+            product.sku = sku
 
         await self._session.flush()
         await self._session.refresh(product)

@@ -18,7 +18,7 @@ def _get_service(container: ServiceContainer = Depends(get_container)) -> CSVImp
     return CSVImportService(container)
 
 
-@router.get("/", response_model=ApiResponse[PaginatedUploads])
+@router.get("", response_model=ApiResponse[PaginatedUploads])
 async def list_tasks(
     service: CSVImportService = Depends(_get_service),
     session: AsyncSession = Depends(get_async_session),
