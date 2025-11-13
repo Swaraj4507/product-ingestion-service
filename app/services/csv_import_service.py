@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.container import ServiceContainer
 from app.core.redis_client import RedisClient
-from app.models.upload import Upload, UploadStatus
+from app.models.upload import TaskType, Upload, UploadStatus
 from app.repository.upload_repository import UploadRepository
 
 
@@ -95,11 +95,14 @@ class CSVImportService:
         session: AsyncSession,
         *,
         status: Optional[str] = None,
+        task_type: Optional[str] = None,
         page: int = 1,
         limit: int = 20,
     ) -> UploadListResult:
         repository = UploadRepository(session)
-        uploads, total = await repository.list_uploads(status=status, page=page, limit=limit)
+        uploads, total = await repository.list_uploads(
+            status=status, task_type=task_type, page=page, limit=limit
+        )
         return UploadListResult(total=total, page=page, limit=limit, items=uploads)
 
     async def _validate_csv_columns(self, upload_file: UploadFile) -> None:

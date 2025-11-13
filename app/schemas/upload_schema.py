@@ -8,6 +8,7 @@ class UploadOut(BaseModel):
     id: UUID
     task_id: UUID
     filename: str
+    task_type: str
     status: str
     processed_records: int
     total_records: int

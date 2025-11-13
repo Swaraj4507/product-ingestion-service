@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.upload import Upload, UploadStatus
+from app.models.upload import TaskType, Upload, UploadStatus
 
 
 class UploadRepository:
@@ -19,10 +19,12 @@ class UploadRepository:
         self,
         task_id: UUID,
         filename: str,
+        task_type: str = TaskType.PRODUCT_INGESTION,
     ) -> Upload:
         upload = Upload(
             task_id=task_id,
             filename=filename,
+            task_type=task_type,
             status=UploadStatus.PENDING,
             processed_records=0,
             total_records=0,
@@ -41,6 +43,7 @@ class UploadRepository:
         self,
         *,
         status: Optional[str] = None,
+        task_type: Optional[str] = None,
         page: int = 1,
         limit: int = 20,
     ) -> tuple[list[Upload], int]:
@@ -53,6 +56,10 @@ class UploadRepository:
         if status:
             base_query = base_query.where(Upload.status == status)
             count_query = count_query.where(Upload.status == status)
+
+        if task_type:
+            base_query = base_query.where(Upload.task_type == task_type)
+            count_query = count_query.where(Upload.task_type == task_type)
 
         # Get total count
         total_result = await self._session.execute(count_query)

@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
+from app.models.upload import TaskType
 from app.repository.product_repository import ProductRepository
 from app.repository.upload_repository import UploadRepository
 
@@ -151,6 +152,7 @@ class ProductService:
         await upload_repo.create_upload(
             task_id=task_id,
             filename="BULK_DELETE",
+            task_type=TaskType.BULK_DELETE,
         )
         await session.commit()
 

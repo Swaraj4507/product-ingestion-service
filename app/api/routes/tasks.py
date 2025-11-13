@@ -23,10 +23,11 @@ async def list_tasks(
     service: CSVImportService = Depends(_get_service),
     session: AsyncSession = Depends(get_async_session),
     status: Optional[str] = Query(default=None, description="Filter by status (pending, processing, completed, failed)"),
+    task_type: Optional[str] = Query(default=None, description="Filter by task type (product_ingestion, bulk_delete)"),
     page: int = Query(default=1, ge=1, description="Page number"),
     limit: int = Query(default=20, ge=1, le=100, description="Items per page"),
 ) -> ApiResponse[PaginatedUploads]:
-    result = await service.list_uploads(session, status=status, page=page, limit=limit)
+    result = await service.list_uploads(session, status=status, task_type=task_type, page=page, limit=limit)
     paginated_data = PaginatedUploads(
         total=result.total,
         page=result.page,

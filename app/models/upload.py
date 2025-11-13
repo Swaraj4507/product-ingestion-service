@@ -19,6 +19,15 @@ class UploadStatus:
         return cls.PENDING, cls.PROCESSING, cls.COMPLETED, cls.FAILED
 
 
+class TaskType:
+    PRODUCT_INGESTION = "product_ingestion"
+    BULK_DELETE = "bulk_delete"
+
+    @classmethod
+    def all(cls) -> tuple[str, ...]:
+        return cls.PRODUCT_INGESTION, cls.BULK_DELETE
+
+
 class Upload(Base):
     __tablename__ = "file_uploads"
 
@@ -34,6 +43,7 @@ class Upload(Base):
         default=uuid4,
     )
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(32), nullable=False, default=TaskType.PRODUCT_INGESTION)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=UploadStatus.PENDING)
     processed_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_records: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
