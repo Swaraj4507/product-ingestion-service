@@ -78,13 +78,33 @@ class UploadSyncRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def mark_processing(self, task_id: UUID, total_records: int) -> None:
-        upload = self._session.query(Upload).filter(Upload.task_id == task_id).one()
+    def get_by_task_id(self, task_id: UUID) -> Upload:
+        return self._session.query(Upload).filter(Upload.task_id == task_id).one()
+
+    def mark_processing(
+        self,
+        task_id: UUID,
+        total_records: int,
+        *,
+        initial_processed: int | None = None,
+    ) -> None:
+        upload = self.get_by_task_id(task_id)
         upload.status = UploadStatus.PROCESSING
         upload.total_records = total_records
-        upload.progress = 0.0
-        upload.processed_records = 0
         upload.completed_at = None
+
+        if total_records <= 0:
+            upload.processed_records = 0
+            upload.progress = 0.0
+            return
+
+        if initial_processed is None:
+            initial_value = min(upload.processed_records, total_records)
+        else:
+            initial_value = max(0, min(initial_processed, total_records))
+
+        upload.processed_records = initial_value
+        upload.progress = (initial_value / total_records) * 100
 
     def update_progress(
         self,
@@ -93,20 +113,20 @@ class UploadSyncRepository:
         total_records: int,
         progress: float,
     ) -> None:
-        upload = self._session.query(Upload).filter(Upload.task_id == task_id).one()
+        upload = self.get_by_task_id(task_id)
         upload.processed_records = processed_records
         upload.total_records = total_records
         upload.progress = progress
         upload.status = UploadStatus.PROCESSING
 
     def mark_completed(self, task_id: UUID) -> None:
-        upload = self._session.query(Upload).filter(Upload.task_id == task_id).one()
+        upload = self.get_by_task_id(task_id)
         upload.status = UploadStatus.COMPLETED
         upload.progress = 100
         upload.completed_at = datetime.now(timezone.utc)
 
     def mark_failed(self, task_id: UUID, reason: Optional[str] = None) -> None:
-        upload = self._session.query(Upload).filter(Upload.task_id == task_id).one()
+        upload = self.get_by_task_id(task_id)
         upload.status = UploadStatus.FAILED
         upload.completed_at = datetime.now(timezone.utc)
 
