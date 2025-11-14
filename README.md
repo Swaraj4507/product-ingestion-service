@@ -1,6 +1,6 @@
 # Product Ingestion Service
 
-FastAPI + Celery based backend for large-scale product ingestion, CSV imports with progress tracking, webhook notifications, and product management APIs.
+FastAPI + Celery based backend for large-scale product ingestion, CSV imports with progress tracking, webhook configuration, and product management APIs.
 
 ## Features
 - FastAPI REST APIs with object-oriented service/repository layering.
