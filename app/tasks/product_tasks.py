@@ -114,7 +114,7 @@ def import_products_from_csv(self, task_id: str, file_path: str) -> None:
                     )
 
                 _update_redis(task_uuid, "in_progress", processed_records, total_records)
-
+                logger.info("Processed %d/%d products for task %s", processed_records, total_records, task_id)
         with database.sync_session() as session:
             upload_repo = UploadSyncRepository(session)
             upload_repo.mark_completed(task_uuid)
